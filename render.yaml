@@ -1,0 +1,88 @@
+services:
+  - type: web
+    name: omnicare-ai-service
+    runtime: docker
+    plan: free
+    region: singapore
+    dockerContext: .
+    dockerfilePath: ./apps/ai-service/Dockerfile
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: omnicare-postgres
+          property: connectionString
+      - key: WEB_ORIGIN
+        value: https://omnicare-chatagent.vercel.app
+      - key: LLM_BASE_URL
+        value: https://r8cp2m4.abc-tunnel.us/v1
+      - key: LLM_API_KEY
+        sync: false
+      - key: LLM_MODEL
+        value: cx/gpt-5.4-mini
+      - key: LLM_FAST_MODEL
+        value: cx/gpt-5.4-mini
+      - key: LLM_FAST_REASONING_EFFORT
+        value: low
+      - key: LLM_REASONING_MODEL
+        value: cx/gpt-5.6-terra
+      - key: LLM_REASONING_PROFILE_EFFORT
+        value: medium
+      - key: LLM_REVIEWER_MODEL
+        value: cx/gpt-5.6-terra
+      - key: LLM_REVIEWER_REASONING_EFFORT
+        value: medium
+      - key: EMBEDDING_MODEL
+        sync: false
+      - key: EMBEDDING_DIMENSIONS
+        value: "1536"
+      - key: EMBEDDING_BATCH_SIZE
+        value: "32"
+      - key: LLM_ENABLED
+        value: "true"
+      - key: LLM_REASONING_EFFORT
+        value: low
+      - key: HARNESS_VERSION
+        value: v3
+      - key: HARNESS_V3_ENABLED
+        value: "true"
+      - key: LANGCHAIN_AGENT_ENABLED
+        value: "true"
+      - key: GRAPHRAG_WORKER_ENABLED
+        value: "true"
+      - key: GRAPHRAG_WORKER_CONCURRENCY
+        value: "4"
+      - key: GRAPHRAG_POLL_SECONDS
+        value: "2"
+      - key: AGENT_MAX_MODEL_CALLS
+        value: "3"
+      - key: RETRIEVAL_TOKEN_BUDGET
+        value: "1200"
+      - key: RETRIEVAL_MAX_CHUNKS
+        value: "3"
+      - key: LEXICAL_FAST_PATH_SCORE
+        value: "0.05"
+      - key: EMBEDDING_CACHE_TTL_SECONDS
+        value: "1800"
+      - key: RETRIEVAL_CACHE_TTL_SECONDS
+        value: "300"
+      - key: RETRIEVAL_CACHE_MAX_ENTRIES
+        value: "1000"
+      - key: ACTION_CONFIRMATION_SECRET
+        generateValue: true
+      - key: LANGSMITH_TRACING
+        sync: false
+      - key: LANGSMITH_ENDPOINT
+        value: https://apac.api.smith.langchain.com
+      - key: LANGSMITH_API_KEY
+        sync: false
+      - key: LANGSMITH_PROJECT
+        value: ChatAgent
+
+databases:
+  - name: omnicare-postgres
+    databaseName: omnicare
+    user: omnicare
+    plan: free
+    region: singapore

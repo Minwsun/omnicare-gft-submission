@@ -1,0 +1,5 @@
+import Link from "next/link";
+
+export default function Home() {
+  return <main><header className="topbar"><Link className="brand" href="/">Omni<span>Care</span></Link><nav><Link href="/help">Trung tâm trợ giúp</Link><Link href="/login">Đăng nhập</Link></nav></header><section className="shell support"><div className="hero"><p className="eyebrow">AI CUSTOMER SUPPORT HUB</p><h1>Hỗ trợ rõ ràng.<br /><em>Có căn cứ.</em></h1><p>Tra cứu giao dịch, chính sách và tình trạng dịch vụ bằng agent có tools, citations và handoff an toàn.</p><div className="chips"><span>Đơn hàng</span><span>Giao hàng</span><span>Thanh toán</span><span>Hoàn tiền</span></div><Link className="primary-link" href="/login">Đăng nhập để bắt đầu</Link></div><section className="panel"><p className="eyebrow">ONE KNOWLEDGE SOURCE</p><h2>Help Center và AI dùng cùng phiên bản tài liệu.</h2><p>Policy, FAQ, terms, guides, incidents và transaction tools được kiểm tra trước mỗi câu trả lời.</p><Link href="/help">Mở Help Center →</Link></section></section></main>;
+}

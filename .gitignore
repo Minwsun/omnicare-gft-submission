@@ -1,0 +1,12 @@
+.env
+.env.local
+*.pem
+*.key
+apps/web/.next/
+apps/web/node_modules/
+node_modules/
+output/
+__pycache__/
+.pytest_cache/
+datasets/artifacts/*
+!datasets/artifacts/release-manifest.json

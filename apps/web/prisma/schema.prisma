@@ -1,0 +1,1137 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum PersonaRole {
+  CUSTOMER
+  ADMIN
+  REVIEWER
+}
+
+enum CustomerTier {
+  REGULAR
+  GOLD
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  PROCESSING
+  SHIPPED
+  OUT_FOR_DELIVERY
+  DELIVERED
+  CANCELLED
+}
+
+enum PaymentStatus {
+  PENDING
+  AUTHORIZED
+  CAPTURED
+  FAILED
+  REFUNDED
+  PARTIALLY_REFUNDED
+}
+
+enum ShipmentStatus {
+  PENDING
+  PICKED_UP
+  IN_TRANSIT
+  OUT_FOR_DELIVERY
+  DELIVERED
+  FAILED
+  RETURNED
+}
+
+enum RefundStatus {
+  REQUESTED
+  PENDING_APPROVAL
+  PROCESSING
+  COMPLETED
+  REJECTED
+}
+
+enum Channel {
+  WEB
+  EMAIL
+}
+
+enum MessageDirection {
+  INBOUND
+  OUTBOUND
+}
+
+enum TicketStatus {
+  OPEN
+  NEED_HUMAN
+  PENDING_CUSTOMER
+  PENDING_APPROVAL
+  RESOLVED
+  CLOSED
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum KnowledgeDocumentType {
+  FAQ
+  POLICY
+  TERMS
+  GUIDE
+  PRODUCT_GUIDE
+  TROUBLESHOOTING
+  SOP
+  INCIDENT
+  HISTORICAL_RESOLUTION
+}
+
+enum KnowledgeVisibility {
+  PUBLIC
+  CUSTOMER_AUTHENTICATED
+  INTERNAL
+}
+
+enum KnowledgeStatus {
+  DRAFT
+  REVIEW
+  PUBLISHED
+  ARCHIVED
+}
+
+enum KnowledgeMarketplace {
+  SHOPEE
+  TIKTOK_SHOP
+  INTERNAL
+}
+
+enum ReviewDecision {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum ToolCallStatus {
+  SUCCESS
+  NOT_FOUND
+  FORBIDDEN
+  CONFLICT
+  UNAVAILABLE
+  INVALID_INPUT
+  FAILED
+  PENDING_APPROVAL
+}
+
+enum KnowledgeEntityType {
+  CONCEPT
+  INTENT
+  POLICY_RULE
+  CUSTOMER_RIGHT
+  PRODUCT
+  ORDER_STATUS
+  PAYMENT_STATUS
+  ACTION
+  INCIDENT
+}
+
+enum KnowledgeRelationType {
+  ANSWERS
+  GOVERNED_BY
+  REQUIRES
+  ALLOWS
+  PROHIBITS
+  APPLIES_TO
+  ESCALATES_TO
+  AFFECTED_BY
+  SUPERSEDES
+  RELATED_TO
+}
+
+enum GraphBuildStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+enum GraphWorkspaceStatus {
+  DRAFT
+  REVIEW
+  PUBLISHED
+  REJECTED
+}
+
+enum GraphNodeKind {
+  DOCUMENT
+  FAQ
+  POLICY
+  TERMS
+  RULE
+  INTENT
+  ACTION
+  PRODUCT_SCOPE
+  ORDER_STATUS
+  PAYMENT_STATUS
+  INCIDENT
+  ESCALATION
+}
+
+enum GraphImportance {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+model UserAccount {
+  id           String        @id @default(cuid())
+  email        String        @unique
+  passwordHash String
+  role         PersonaRole
+  customerId   String?       @unique
+  active       Boolean       @default(true)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  customer     Customer?     @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  sessions     AuthSession[]
+}
+
+model AuthSession {
+  id        String      @id @default(cuid())
+  userId    String
+  tokenHash String      @unique
+  expiresAt DateTime
+  createdAt DateTime    @default(now())
+  revokedAt DateTime?
+  user      UserAccount @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+}
+
+model LoginAttempt {
+  id        String   @id @default(cuid())
+  email     String
+  ipHash    String
+  success   Boolean
+  createdAt DateTime @default(now())
+
+  @@index([email, createdAt])
+  @@index([ipHash, createdAt])
+}
+
+model Customer {
+  id              String           @id
+  name            String
+  email           String           @unique
+  phoneMasked     String?
+  tier            CustomerTier     @default(REGULAR)
+  locale          String           @default("vi-VN")
+  createdAt       DateTime         @default(now())
+  addresses       Address[]
+  orders          Order[]
+  conversations   Conversation[]
+  tickets         Ticket[]
+  account         UserAccount?
+  commerceActions CommerceAction[]
+  checkoutSessions CheckoutSession[]
+}
+
+model Address {
+  id         String   @id @default(cuid())
+  customerId String
+  label      String
+  recipient  String
+  line1      String
+  city       String
+  country    String   @default("VN")
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  checkoutSessions CheckoutSession[]
+}
+
+model Product {
+  id            String                @id
+  sku           String                @unique
+  name          String
+  category      String
+  brand         String
+  description   String
+  price         Decimal               @db.Decimal(14, 2)
+  stock         Int
+  rating        Decimal               @db.Decimal(3, 2)
+  soldCount     Int                   @default(0)
+  active        Boolean               @default(true)
+  metadata      Json                  @default("{}")
+  items         OrderItem[]
+  returnProfile ProductReturnProfile?
+  checkoutSessions CheckoutSession[]
+
+  @@index([category, active, stock])
+  @@index([price])
+}
+
+model CheckoutSession {
+  id             String   @id
+  customerId     String
+  conversationId String
+  productId      String
+  addressId      String?
+  quantity       Int      @default(1)
+  paymentMethod  String?
+  unitPrice      Decimal  @db.Decimal(14, 2)
+  totalAmount    Decimal  @db.Decimal(14, 2)
+  status         String   @default("DRAFT")
+  orderId        String?  @unique
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  expiresAt      DateTime
+  customer       Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  product        Product  @relation(fields: [productId], references: [id])
+  address        Address? @relation(fields: [addressId], references: [id])
+
+  @@index([customerId, conversationId, status])
+}
+
+model ProductReturnProfile {
+  id                  String  @id @default(cuid())
+  productId           String  @unique
+  returnable          Boolean @default(true)
+  sealedRequired      Boolean @default(false)
+  accessoriesRequired Boolean @default(false)
+  evidenceTypes       Json
+  exclusions          Json
+  product             Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+}
+
+model ReturnPolicyRule {
+  id             String    @id
+  category       String
+  reasonCode     String
+  windowDays     Int
+  returnable     Boolean
+  sealedRequired Boolean   @default(false)
+  evidenceTypes  Json
+  conditions     Json
+  exceptions     Json
+  authorityLevel Int       @default(100)
+  effectiveFrom  DateTime
+  effectiveTo    DateTime?
+  documentId     String
+  versionId      String
+  createdAt      DateTime  @default(now())
+
+  @@index([category, reasonCode, effectiveFrom, effectiveTo])
+}
+
+model Order {
+  id              String           @id
+  customerId      String
+  status          OrderStatus
+  totalAmount     Decimal          @db.Decimal(14, 2)
+  currency        String           @default("VND")
+  placedAt        DateTime
+  updatedAt       DateTime         @updatedAt
+  customer        Customer         @relation(fields: [customerId], references: [id])
+  items           OrderItem[]
+  payments        Payment[]
+  shipments       Shipment[]
+  refunds         Refund[]
+  tickets         Ticket[]
+  commerceActions CommerceAction[]
+
+  @@index([customerId, placedAt])
+  @@index([customerId, status, placedAt])
+}
+
+model CommerceAction {
+  id             String   @id
+  customerId     String
+  orderId        String
+  conversationId String
+  type           String
+  status         String
+  payload        Json
+  result         Json?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  customer       Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  order          Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([customerId, createdAt])
+  @@index([orderId, type, status])
+}
+
+model OrderItem {
+  id        String  @id @default(cuid())
+  orderId   String
+  productId String
+  quantity  Int
+  unitPrice Decimal @db.Decimal(14, 2)
+  order     Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product   Product @relation(fields: [productId], references: [id])
+}
+
+model Payment {
+  id              String        @id
+  orderId         String
+  provider        String
+  status          PaymentStatus
+  amount          Decimal       @db.Decimal(14, 2)
+  currency        String        @default("VND")
+  maskedReference String
+  observedAt      DateTime
+  order           Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+}
+
+model Shipment {
+  id                String          @id
+  orderId           String
+  carrier           String
+  trackingMasked    String
+  status            ShipmentStatus
+  estimatedDelivery DateTime?
+  observedAt        DateTime
+  order             Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  events            ShipmentEvent[]
+
+  @@index([orderId, observedAt])
+}
+
+model ShipmentEvent {
+  id         String   @id @default(cuid())
+  shipmentId String
+  sequence   Int
+  status     String
+  location   String?
+  occurredAt DateTime
+  shipment   Shipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+
+  @@unique([shipmentId, sequence])
+}
+
+model Refund {
+  id          String       @id
+  orderId     String
+  status      RefundStatus
+  amount      Decimal      @db.Decimal(14, 2)
+  reason      String
+  observedAt  DateTime
+  referenceId String?
+  order       Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+}
+
+model Conversation {
+  id            String    @id @default(cuid())
+  customerId    String?
+  channel       Channel
+  title         String?
+  externalId    String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  lastMessageAt DateTime  @default(now())
+  closedAt      DateTime?
+  customer      Customer? @relation(fields: [customerId], references: [id])
+  messages      Message[]
+  attachments   ChatAttachment[]
+  tickets       Ticket[]
+  aiRuns        AiRun[]
+  memory        ConversationMemory?
+
+  @@unique([channel, externalId])
+  @@index([customerId, lastMessageAt])
+}
+
+model ConversationMemory {
+  conversationId      String       @id
+  customerId          String?
+  summary             String       @default("")
+  activeContext       Json         @default("{}")
+  unresolvedQuestions Json         @default("[]")
+  graphAnchors        Json         @default("[]")
+  messageCount        Int          @default(0)
+  version             Int          @default(1)
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
+  conversation        Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([customerId, updatedAt])
+}
+
+model MemoryNode {
+  id              String       @id
+  customerId      String
+  conversationId  String?
+  type            String
+  key             String
+  label           String
+  data            Json         @default("{}")
+  confidence      Float        @default(1)
+  sourceMessageId String?
+  active          Boolean      @default(true)
+  expiresAt       DateTime?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  outgoingEdges   MemoryEdge[] @relation("MemoryEdgeSource")
+  incomingEdges   MemoryEdge[] @relation("MemoryEdgeTarget")
+
+  @@unique([customerId, type, key])
+  @@index([customerId, type, active, updatedAt])
+  @@index([conversationId, active])
+}
+
+model MemoryEdge {
+  id             String     @id
+  customerId     String
+  conversationId String?
+  sourceId       String
+  targetId       String
+  relation       String
+  weight         Float      @default(1)
+  metadata       Json       @default("{}")
+  active         Boolean    @default(true)
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+  source         MemoryNode @relation("MemoryEdgeSource", fields: [sourceId], references: [id], onDelete: Cascade)
+  target         MemoryNode @relation("MemoryEdgeTarget", fields: [targetId], references: [id], onDelete: Cascade)
+
+  @@unique([sourceId, targetId, relation])
+  @@index([customerId, relation, active])
+  @@index([conversationId, active])
+}
+
+model CustomerMemoryFact {
+  id                   String   @id @default(cuid())
+  customerId           String
+  category             String
+  key                  String
+  value                Json
+  confidence           Float    @default(1)
+  sourceConversationId String?
+  sourceMessageId      String?
+  provenance           String
+  active               Boolean  @default(true)
+  expiresAt            DateTime?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@unique([customerId, category, key])
+  @@index([customerId, active, expiresAt])
+}
+
+model MemorySnapshot {
+  id             String   @id @default(cuid())
+  conversationId String
+  customerId     String?
+  summary        String
+  state          Json
+  version        Int
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now())
+
+  @@index([conversationId, active, createdAt])
+}
+
+model Message {
+  id             String           @id @default(cuid())
+  conversationId String
+  direction      MessageDirection
+  content        String
+  metadata       Json?
+  createdAt      DateTime         @default(now())
+  conversation   Conversation     @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  attachments    ChatAttachment[]
+}
+
+model ChatAttachment {
+  id             String       @id @default(cuid())
+  conversationId String
+  messageId      String?
+  customerId     String
+  fileName       String
+  mimeType       String
+  size           Int
+  checksum       String
+  bytes          Bytes?
+  status         String       @default("UPLOADED")
+  analysis       Json?
+  createdAt      DateTime     @default(now())
+  deletedAt      DateTime?
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  message        Message?     @relation(fields: [messageId], references: [id], onDelete: SetNull)
+
+  @@unique([conversationId, checksum])
+  @@index([customerId, conversationId, createdAt])
+  @@index([messageId])
+}
+
+model Ticket {
+  id             String        @id
+  customerId     String?
+  orderId        String?
+  conversationId String
+  status         TicketStatus  @default(OPEN)
+  priority       Priority      @default(LOW)
+  category       String
+  summary        String
+  assignedTo     String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  customer       Customer?     @relation(fields: [customerId], references: [id])
+  order          Order?        @relation(fields: [orderId], references: [id])
+  conversation   Conversation  @relation(fields: [conversationId], references: [id])
+  events         TicketEvent[]
+
+  @@index([customerId, status, updatedAt])
+}
+
+model TicketEvent {
+  id        String   @id @default(cuid())
+  ticketId  String
+  type      String
+  payload   Json?
+  createdAt DateTime @default(now())
+  ticket    Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+}
+
+model KnowledgeCategory {
+  id        String              @id
+  slug      String              @unique
+  name      String
+  documents KnowledgeDocument[]
+}
+
+model KnowledgeDocument {
+  id               String                @id
+  slug             String
+  locale           String                @default("vi-VN")
+  type             KnowledgeDocumentType
+  visibility       KnowledgeVisibility
+  marketplace      KnowledgeMarketplace   @default(INTERNAL)
+  authorityLevel   Int
+  categoryId       String
+  currentVersionId String?               @unique
+  archivedAt       DateTime?
+  ownerId          String
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+  category         KnowledgeCategory     @relation(fields: [categoryId], references: [id])
+  versions         KnowledgeVersion[]    @relation("DocumentVersions")
+  currentVersion   KnowledgeVersion?     @relation("CurrentVersion", fields: [currentVersionId], references: [id])
+  feedback         KnowledgeFeedback[]
+  sourcePage       KnowledgeSourcePage?
+
+  @@unique([slug, locale])
+  @@index([marketplace, visibility])
+}
+
+model KnowledgeVersion {
+  id              String                   @id
+  documentId      String
+  semanticVersion String
+  title           String
+  summary         String
+  content         String
+  status          KnowledgeStatus          @default(DRAFT)
+  effectiveFrom   DateTime
+  effectiveTo     DateTime?
+  searchable      Boolean                  @default(false)
+  changeSummary   String
+  publishedAt     DateTime?
+  publishedBy     String?
+  createdAt       DateTime                 @default(now())
+  document        KnowledgeDocument        @relation("DocumentVersions", fields: [documentId], references: [id], onDelete: Cascade)
+  currentFor      KnowledgeDocument?       @relation("CurrentVersion")
+  chunks          KnowledgeChunk[]
+  reviews         KnowledgeReview[]
+  feedback        KnowledgeFeedback[]
+  retrievals      AiRetrievalResult[]
+  graphBuilds     KnowledgeGraphBuild[]
+  entities        KnowledgeEntity[]
+  claims          KnowledgeClaim[]
+  outgoingEdges   KnowledgeEdge[]          @relation("EdgeVersion")
+  sourceSections  KnowledgeSourceSection[]
+
+  @@unique([documentId, semanticVersion])
+  @@index([status, searchable, effectiveFrom, effectiveTo])
+}
+
+model KnowledgeChunk {
+  id               String                       @id
+  versionId        String
+  section          String
+  content          String
+  contentHash      String?
+  canonicalChunkId String?
+  retrievalEnabled Boolean                      @default(true)
+  tokenCount       Int
+  embedding        Unsupported("vector(1536)")?
+  version          KnowledgeVersion             @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  canonicalChunk   KnowledgeChunk?               @relation("CanonicalKnowledgeChunk", fields: [canonicalChunkId], references: [id])
+  duplicateChunks  KnowledgeChunk[]              @relation("CanonicalKnowledgeChunk")
+  retrievals       AiRetrievalResult[]
+  entities         KnowledgeEntity[]
+  claims           KnowledgeClaim[]
+  edges            KnowledgeEdge[]
+  sourceSection    KnowledgeSourceSection?
+
+  @@index([contentHash, retrievalEnabled])
+  @@index([canonicalChunkId])
+}
+
+model KnowledgeSource {
+  id        String                    @id @default(cuid())
+  name      String
+  baseUrl   String
+  locale    String                    @default("vi-VN")
+  authority Int                       @default(100)
+  createdAt DateTime                  @default(now())
+  snapshots KnowledgeSourceSnapshot[]
+
+  @@unique([baseUrl, locale])
+}
+
+model KnowledgeSourceSnapshot {
+  id         String                @id @default(cuid())
+  sourceId   String
+  capturedAt DateTime
+  sitemapUrl String
+  checksum   String
+  pageCount  Int                   @default(0)
+  status     String                @default("RUNNING")
+  error      String?
+  createdAt  DateTime              @default(now())
+  source     KnowledgeSource       @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  pages      KnowledgeSourcePage[]
+
+  @@unique([sourceId, checksum])
+  @@index([sourceId, capturedAt])
+}
+
+model KnowledgeSourcePage {
+  id                  String                   @id @default(cuid())
+  snapshotId          String
+  url                 String
+  title               String
+  rawHtml             String
+  normalizedText      String
+  checksum            String
+  fetchedAt           DateTime
+  knowledgeDocumentId String?                  @unique
+  snapshot            KnowledgeSourceSnapshot  @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+  knowledgeDocument   KnowledgeDocument?       @relation(fields: [knowledgeDocumentId], references: [id], onDelete: SetNull)
+  sections            KnowledgeSourceSection[]
+
+  @@unique([snapshotId, url])
+  @@index([url])
+  @@index([checksum])
+}
+
+model KnowledgeSourceSection {
+  id           String              @id @default(cuid())
+  sourcePageId String
+  heading      String
+  content      String
+  ordinal      Int
+  checksum     String
+  versionId    String
+  chunkId      String              @unique
+  sourcePage   KnowledgeSourcePage @relation(fields: [sourcePageId], references: [id], onDelete: Cascade)
+  version      KnowledgeVersion    @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  chunk        KnowledgeChunk      @relation(fields: [chunkId], references: [id], onDelete: Cascade)
+
+  @@unique([sourcePageId, ordinal])
+  @@index([versionId])
+}
+
+model KnowledgeGraphBuild {
+  id               String           @id @default(cuid())
+  versionId        String
+  status           GraphBuildStatus @default(PENDING)
+  extractorVersion String
+  entityCount      Int              @default(0)
+  edgeCount        Int              @default(0)
+  claimCount       Int              @default(0)
+  error            String?
+  startedAt        DateTime?
+  completedAt      DateTime?
+  createdAt        DateTime         @default(now())
+  version          KnowledgeVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+
+  @@index([versionId, status])
+}
+
+model KnowledgeIngestionRun {
+  id             String    @id @default(cuid())
+  documentId     String?
+  versionId      String?
+  status         String    @default("QUEUED")
+  stage          String    @default("QUEUED")
+  progress       Int       @default(0)
+  processedUnits Int       @default(0)
+  totalUnits     Int       @default(0)
+  model          String    @default("cx/gpt-5.6-terra")
+  priority       String    @default("NORMAL")
+  payload        Json      @default("{}")
+  result         Json?
+  error          String?
+  attempts       Int       @default(0)
+  heartbeatAt    DateTime?
+  startedAt      DateTime?
+  completedAt    DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([status, priority, createdAt])
+  @@index([documentId, createdAt])
+}
+
+model KnowledgeVisualizationRevision {
+  id            String   @id @default(cuid())
+  documentId    String
+  versionId     String?
+  ingestionRunId String?
+  revision      Int
+  status        String   @default("BUILDING")
+  model         String
+  promptVersion String
+  sourceHash    String
+  nodes         Json     @default("[]")
+  edges         Json     @default("[]")
+  placement     Json     @default("{}")
+  validation    Json     @default("{}")
+  active        Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  completedAt   DateTime?
+
+  @@unique([documentId, revision])
+  @@index([documentId, active, createdAt])
+  @@index([versionId])
+  @@index([ingestionRunId])
+}
+
+model KnowledgeGraphSnapshot {
+  id              String    @id @default(cuid())
+  status          String    @default("BUILDING")
+  model           String
+  promptVersion   String
+  coverage        Float     @default(0)
+  documentCount   Int       @default(0)
+  chunkCount      Int       @default(0)
+  entityCount     Int       @default(0)
+  edgeCount       Int       @default(0)
+  claimCount      Int       @default(0)
+  communityCount  Int       @default(0)
+  summaryCount    Int       @default(0)
+  checksum        String?
+  active          Boolean   @default(false)
+  createdAt       DateTime  @default(now())
+  completedAt     DateTime?
+
+  @@index([active, createdAt])
+  @@index([status, createdAt])
+}
+
+model KnowledgeSummaryNode {
+  id             String   @id @default(cuid())
+  snapshotId     String
+  versionId      String?
+  parentId       String?
+  level          Int
+  nodeType       String
+  title          String
+  summary        String
+  sourceChunkIds Json     @default("[]")
+  metadata       Json     @default("{}")
+  embedding      Unsupported("vector(1536)")?
+  active         Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([snapshotId, level, active])
+  @@index([versionId, level])
+  @@index([parentId])
+}
+
+model KnowledgeCommunity {
+  id          String   @id @default(cuid())
+  snapshotId  String
+  parentId    String?
+  level       Int
+  title       String
+  summary     String
+  fullContent String
+  rank        Float    @default(0)
+  metadata    Json     @default("{}")
+  embedding   Unsupported("vector(1536)")?
+  active      Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([snapshotId, level, active])
+  @@index([parentId])
+}
+
+model KnowledgeCommunityMember {
+  id          String  @id @default(cuid())
+  communityId String
+  entityId    String?
+  chunkId     String?
+  weight      Float   @default(1)
+  metadata    Json    @default("{}")
+
+  @@index([communityId])
+  @@index([entityId])
+  @@index([chunkId])
+  @@unique([communityId, entityId, chunkId])
+}
+
+model GraphWorkspace {
+  id           String               @id @default(cuid())
+  name         String
+  status       GraphWorkspaceStatus @default(DRAFT)
+  centerNodeId String?
+  nodes        Json
+  edges        Json
+  validation   Json?
+  createdBy    String
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+  draftNodes   GraphDraftNode[]
+  draftEdges   GraphDraftEdge[]
+  issues       GraphValidationIssue[]
+
+  @@index([status, updatedAt])
+}
+
+model GraphDraftNode {
+  id          String           @id @default(cuid())
+  workspaceId String
+  kind        GraphNodeKind
+  name        String
+  summary     String           @default("")
+  content     String           @default("")
+  importance  GraphImportance  @default(MEDIUM)
+  visibility  KnowledgeVisibility @default(INTERNAL)
+  marketplace KnowledgeMarketplace @default(INTERNAL)
+  mandatory   Boolean          @default(false)
+  archived    Boolean          @default(false)
+  positionX   Float            @default(0)
+  positionY   Float            @default(0)
+  metadata    Json?
+  documentId  String?
+  versionId   String?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  workspace   GraphWorkspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  outgoing    GraphDraftEdge[] @relation("DraftEdgeSource")
+  incoming    GraphDraftEdge[] @relation("DraftEdgeTarget")
+
+  @@index([workspaceId, kind, importance])
+}
+
+model GraphDraftEdge {
+  id          String                @id @default(cuid())
+  workspaceId String
+  sourceId    String
+  targetId    String
+  relation    KnowledgeRelationType
+  weight      Float                 @default(1)
+  metadata    Json?
+  createdAt   DateTime              @default(now())
+  workspace   GraphWorkspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  source      GraphDraftNode         @relation("DraftEdgeSource", fields: [sourceId], references: [id], onDelete: Cascade)
+  target      GraphDraftNode         @relation("DraftEdgeTarget", fields: [targetId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, sourceId, targetId, relation])
+  @@index([workspaceId, relation])
+}
+
+model GraphValidationIssue {
+  id          String         @id @default(cuid())
+  workspaceId String
+  severity    GraphImportance
+  code        String
+  message     String
+  nodeId      String?
+  edgeId      String?
+  resolved    Boolean        @default(false)
+  createdAt   DateTime       @default(now())
+  workspace   GraphWorkspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, resolved, severity])
+}
+
+model KnowledgeEntity {
+  id            String              @id @default(cuid())
+  versionId     String
+  chunkId       String
+  type          KnowledgeEntityType
+  canonicalName String
+  normalizedKey String
+  metadata      Json?
+  createdAt     DateTime            @default(now())
+  version       KnowledgeVersion    @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  chunk         KnowledgeChunk      @relation(fields: [chunkId], references: [id], onDelete: Cascade)
+  outgoingEdges KnowledgeEdge[]     @relation("EdgeSource")
+  incomingEdges KnowledgeEdge[]     @relation("EdgeTarget")
+
+  @@unique([versionId, type, normalizedKey])
+  @@index([type, normalizedKey])
+}
+
+model KnowledgeEdge {
+  id        String                @id @default(cuid())
+  versionId String
+  chunkId   String
+  sourceId  String
+  targetId  String
+  relation  KnowledgeRelationType
+  weight    Float                 @default(1)
+  metadata  Json?
+  createdAt DateTime              @default(now())
+  version   KnowledgeVersion      @relation("EdgeVersion", fields: [versionId], references: [id], onDelete: Cascade)
+  chunk     KnowledgeChunk        @relation(fields: [chunkId], references: [id], onDelete: Cascade)
+  source    KnowledgeEntity       @relation("EdgeSource", fields: [sourceId], references: [id], onDelete: Cascade)
+  target    KnowledgeEntity       @relation("EdgeTarget", fields: [targetId], references: [id], onDelete: Cascade)
+
+  @@unique([sourceId, targetId, relation, chunkId])
+  @@index([sourceId, relation])
+  @@index([targetId, relation])
+}
+
+model KnowledgeClaim {
+  id             String           @id @default(cuid())
+  versionId      String
+  chunkId        String
+  subject        String
+  predicate      String
+  value          String
+  polarity       Int              @default(1)
+  authorityLevel Int
+  effectiveFrom  DateTime
+  effectiveTo    DateTime?
+  scope          Json?
+  createdAt      DateTime         @default(now())
+  version        KnowledgeVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  chunk          KnowledgeChunk   @relation(fields: [chunkId], references: [id], onDelete: Cascade)
+
+  @@index([subject, predicate, effectiveFrom, effectiveTo])
+}
+
+model KnowledgeReview {
+  id         String           @id @default(cuid())
+  versionId  String
+  reviewerId String
+  decision   ReviewDecision   @default(PENDING)
+  comment    String?
+  createdAt  DateTime         @default(now())
+  decidedAt  DateTime?
+  version    KnowledgeVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+}
+
+model KnowledgeFeedback {
+  id         String            @id @default(cuid())
+  documentId String
+  versionId  String
+  helpful    Boolean
+  comment    String?
+  createdAt  DateTime          @default(now())
+  document   KnowledgeDocument @relation(fields: [documentId], references: [id])
+  version    KnowledgeVersion  @relation(fields: [versionId], references: [id])
+}
+
+model KnowledgeGap {
+  id          String   @id @default(cuid())
+  query       String
+  reason      String
+  occurrences Int      @default(1)
+  status      String   @default("OPEN")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model ServiceIncident {
+  id          String    @id
+  title       String
+  description String
+  status      String
+  severity    Priority
+  startsAt    DateTime
+  endsAt      DateTime?
+  scope       Json
+}
+
+model AiRun {
+  id             String              @id @default(cuid())
+  conversationId String
+  promptVersion  String
+  intent         String?
+  confidence     Float?
+  requiresHuman  Boolean             @default(false)
+  startedAt      DateTime            @default(now())
+  completedAt    DateTime?
+  conversation   Conversation        @relation(fields: [conversationId], references: [id])
+  steps          AiStep[]
+  toolCalls      AiToolCall[]
+  retrievals     AiRetrievalResult[]
+
+  @@index([conversationId, startedAt])
+}
+
+model AiStep {
+  id        String @id @default(cuid())
+  runId     String
+  name      String
+  status    String
+  latencyMs Int
+  summary   Json?
+  run       AiRun  @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@index([runId])
+}
+
+model AiToolCall {
+  id             String         @id @default(cuid())
+  runId          String
+  toolName       String
+  status         ToolCallStatus
+  referenceId    String?
+  inputRedacted  Json
+  outputRedacted Json?
+  latencyMs      Int
+  createdAt      DateTime       @default(now())
+  run            AiRun          @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@index([runId])
+}
+
+model AiRetrievalResult {
+  id        String           @id @default(cuid())
+  runId     String
+  versionId String
+  chunkId   String
+  score     Float
+  rank      Int
+  run       AiRun            @relation(fields: [runId], references: [id], onDelete: Cascade)
+  version   KnowledgeVersion @relation(fields: [versionId], references: [id])
+  chunk     KnowledgeChunk   @relation(fields: [chunkId], references: [id])
+
+  @@index([runId])
+}
+
+model AuditLog {
+  id         String      @id @default(cuid())
+  actorId    String
+  actorRole  PersonaRole
+  action     String
+  entityType String
+  entityId   String
+  payload    Json?
+  createdAt  DateTime    @default(now())
+}
